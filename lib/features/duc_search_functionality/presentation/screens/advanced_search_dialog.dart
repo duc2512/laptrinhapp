@@ -150,6 +150,19 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Helper text: not all fields required
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          '*Chỉ cần nhập ít nhất một tiêu chí để tìm kiếm',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+
                       // Borrower name
                       TextField(
                         controller: _borrowerNameController,

@@ -138,31 +138,28 @@ class SearchService {
       (cards) {
         var filtered = cards;
 
-        // Filter by borrower name
+        // Filter by borrower name (support diacritics-insensitive match)
         if (query.borrowerName != null && query.borrowerName!.isNotEmpty) {
+          final q = query.borrowerName!.trim();
           filtered = filtered.where((card) {
-            return card.borrowerName
-                .toLowerCase()
-                .contains(query.borrowerName!.toLowerCase().trim());
+            return _containsQuery(card.borrowerName, q);
           }).toList();
         }
 
-        // Filter by book name
+        // Filter by book name (support diacritics-insensitive match)
         if (query.bookName != null && query.bookName!.isNotEmpty) {
+          final q = query.bookName!.trim();
           filtered = filtered.where((card) {
-            return card.bookName
-                .toLowerCase()
-                .contains(query.bookName!.toLowerCase().trim());
+            return _containsQuery(card.bookName, q);
           }).toList();
         }
 
-        // Filter by class
+        // Filter by class (support diacritics-insensitive match)
         if (query.borrowerClass != null && query.borrowerClass!.isNotEmpty) {
+          final q = query.borrowerClass!.trim();
           filtered = filtered.where((card) {
-            return card.borrowerClass
-                    ?.toLowerCase()
-                    .contains(query.borrowerClass!.toLowerCase().trim()) ??
-                false;
+            final className = card.borrowerClass ?? '';
+            return _containsQuery(className, q);
           }).toList();
         }
 
@@ -223,11 +220,10 @@ class SearchService {
       (failure) => Left(failure),
       (cards) {
         final names = cards
-            .map((card) => card.borrowerName)
-            .where((name) =>
-                name.toLowerCase().startsWith(prefix.toLowerCase().trim()))
-            .toSet()
-            .toList();
+          .map((card) => card.borrowerName)
+          .where((name) => _containsQuery(name, prefix))
+          .toSet()
+          .toList();
 
         names.sort();
         return Right(names.take(10).toList());
@@ -249,11 +245,10 @@ class SearchService {
       (failure) => Left(failure),
       (cards) {
         final books = cards
-            .map((card) => card.bookName)
-            .where((name) =>
-                name.toLowerCase().startsWith(prefix.toLowerCase().trim()))
-            .toSet()
-            .toList();
+          .map((card) => card.bookName)
+          .where((name) => _containsQuery(name, prefix))
+          .toSet()
+          .toList();
 
         books.sort();
         return Right(books.take(10).toList());

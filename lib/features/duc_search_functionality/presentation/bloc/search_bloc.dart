@@ -2,8 +2,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../data/services/search_cache_service.dart';
 import '../../domain/repositories/search_repository.dart';
+import '../../../../shared/models/borrow_card.dart';
 import 'search_event.dart';
 import 'search_state.dart';
+import '../../domain/entities/search_query.dart';
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository;
@@ -164,18 +166,66 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     result.fold(
       (failure) => emit(SearchError(failure.message)),
       (results) {
+        final queryLabel = _formatAdvancedQuery(event.query);
+
         if (results.isEmpty) {
-          emit(const SearchEmpty('Advanced search'));
+          emit(SearchEmpty(queryLabel));
         } else {
           emit(SearchLoaded(
             results: results,
-            query: 'Advanced search',
+            query: queryLabel,
             totalResults: results.length,
             fromCache: false,
           ));
         }
       },
     );
+  }
+
+  String _formatAdvancedQuery(SearchQuery q) {
+    final parts = <String>[];
+
+    if (q.borrowerName != null && q.borrowerName!.trim().isNotEmpty) {
+      parts.add('Tên: "${q.borrowerName!.trim()}"');
+    }
+    if (q.bookName != null && q.bookName!.trim().isNotEmpty) {
+      parts.add('Sách: "${q.bookName!.trim()}"');
+    }
+    if (q.borrowerClass != null && q.borrowerClass!.trim().isNotEmpty) {
+      parts.add('Lớp: "${q.borrowerClass!.trim()}"');
+    }
+    if (q.status != null) {
+      parts.add('Trạng thái: ${_getStatusText(q.status)}');
+    }
+    if (q.borrowDateFrom != null || q.borrowDateTo != null) {
+      final from = q.borrowDateFrom != null ? q.borrowDateFrom!.toIso8601String().split('T').first : '';
+      final to = q.borrowDateTo != null ? q.borrowDateTo!.toIso8601String().split('T').first : '';
+      parts.add('Ngày mượn: ${from.isNotEmpty ? from : '...'} - ${to.isNotEmpty ? to : '...'}');
+    }
+    if (q.returnDateFrom != null || q.returnDateTo != null) {
+      final from = q.returnDateFrom != null ? q.returnDateFrom!.toIso8601String().split('T').first : '';
+      final to = q.returnDateTo != null ? q.returnDateTo!.toIso8601String().split('T').first : '';
+      parts.add('Ngày trả: ${from.isNotEmpty ? from : '...'} - ${to.isNotEmpty ? to : '...'}');
+    }
+
+    // Prepend type label (Vietnamese) for clarity
+    parts.insert(0, 'Loại: ${q.type.toVietnamese()}');
+
+    if (parts.isEmpty) return 'Tìm kiếm nâng cao';
+    return parts.join(', ');
+  }
+
+  String _getStatusText(BorrowStatus? status) {
+    switch (status) {
+      case BorrowStatus.borrowed:
+        return 'Đang mượn';
+      case BorrowStatus.returned:
+        return 'Đã trả';
+      case BorrowStatus.overdue:
+        return 'Quá hạn';
+      default:
+        return 'Không xác định';
+    }
   }
 
   Future<void> _onClearSearch(

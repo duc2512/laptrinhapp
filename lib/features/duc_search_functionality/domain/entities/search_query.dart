@@ -78,3 +78,16 @@ class SearchQuery extends Equatable {
         type,
       ];
 }
+
+extension SearchTypeExtension on SearchType {
+  String toVietnamese() {
+    switch (this) {
+      case SearchType.borrowerName:
+        return 'Theo tên người mượn';
+      case SearchType.bookName:
+        return 'Theo tên sách';
+      case SearchType.advanced:
+        return 'Nâng cao';
+    }
+  }
+}

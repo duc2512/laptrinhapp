@@ -15,6 +15,7 @@ import '../widgets/search_bar_widget.dart';
 import '../widgets/search_result_card_widget.dart';
 import '../widgets/search_history_widget.dart';
 import '../widgets/book_result_card_widget.dart';
+import 'advanced_search_dialog.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({Key? key}) : super(key: key);
@@ -68,8 +69,11 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _onTabChanged() {
     if (_tabController.indexIsChanging) {
-      // Clear search when switching tabs
-      _searchController.clear();
+      // Clear search when switching tabs and rebuild to update UI (hint text)
+      setState(() {
+        _searchController.clear();
+      });
+
       context.read<SearchBloc>().add(const ClearSearchEvent());
     }
   }
@@ -169,6 +173,24 @@ class _SearchScreenState extends State<SearchScreen>
           ),
         ),
         title: const Text('Tìm kiếm'),
+        actions: [
+          if (!PermissionHelper.isRegularUser(_currentUser))
+            IconButton(
+              tooltip: 'Tìm kiếm nâng cao',
+              icon: const Icon(Icons.filter_alt_outlined),
+              onPressed: () {
+                // Get the SearchBloc from the current context before opening dialog
+                final searchBloc = context.read<SearchBloc>();
+                showDialog(
+                  context: context,
+                  builder: (dialogContext) => BlocProvider<SearchBloc>.value(
+                    value: searchBloc,
+                    child: const AdvancedSearchDialog(),
+                  ),
+                );
+              },
+            ),
+        ],
         bottom: PermissionHelper.isRegularUser(_currentUser)
             ? null // User: No tabs
             : TabBar(
@@ -344,9 +366,15 @@ class _SearchScreenState extends State<SearchScreen>
             padding: const EdgeInsets.all(16),
             itemCount: state.results.length,
             itemBuilder: (context, index) {
+              // Choose highlight target based on current tab: index 0 = borrower, 1 = book
+              final highlightTarget = _tabController.index == 0
+                  ? HighlightTarget.borrower
+                  : HighlightTarget.book;
+
               return SearchResultCardWidget(
                 card: state.results[index],
                 query: state.query,
+                highlightTarget: highlightTarget,
               );
             },
           ),

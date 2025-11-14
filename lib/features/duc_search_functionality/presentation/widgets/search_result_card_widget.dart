@@ -6,14 +6,18 @@ import '../../../../shared/models/borrow_card.dart';
 import '../../../tuan_borrow_management/presentation/screens/borrow_detail_screen.dart';
 import '../../../tuan_borrow_management/presentation/bloc/borrow_bloc.dart';
 
+enum HighlightTarget { both, book, borrower }
+
 class SearchResultCardWidget extends StatelessWidget {
   final BorrowCard card;
   final String query;
+  final HighlightTarget highlightTarget;
 
   const SearchResultCardWidget({
     Key? key,
     required this.card,
     required this.query,
+    this.highlightTarget = HighlightTarget.both,
   }) : super(key: key);
 
   @override
@@ -55,7 +59,8 @@ class SearchResultCardWidget extends StatelessWidget {
                   Expanded(
                     child: _buildHighlightedText(
                       card.bookName,
-                      query,
+                      // Only highlight book name when target includes book
+                      (highlightTarget == HighlightTarget.book || highlightTarget == HighlightTarget.both) ? query : '',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -78,7 +83,8 @@ class SearchResultCardWidget extends StatelessWidget {
                   Expanded(
                     child: _buildHighlightedText(
                       '${card.borrowerName}${card.borrowerClass != null ? ' - ${card.borrowerClass}' : ''}',
-                      query,
+                      // Only highlight borrower when target includes borrower
+                      (highlightTarget == HighlightTarget.borrower || highlightTarget == HighlightTarget.both) ? query : '',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
@@ -138,7 +144,10 @@ class SearchResultCardWidget extends StatelessWidget {
     TextStyle? style,
   }) {
     if (query.isEmpty) {
-      return Text(text, style: style);
+      return Text(
+        text,
+        style: style ?? const TextStyle(color: Colors.black87),
+      );
     }
 
     final lowerText = text.toLowerCase();
@@ -146,10 +155,15 @@ class SearchResultCardWidget extends StatelessWidget {
     final index = lowerText.indexOf(lowerQuery);
 
     if (index == -1) {
-      return Text(text, style: style);
+      return Text(
+        text,
+        style: style ?? const TextStyle(color: Colors.black87),
+      );
     }
 
-    final defaultStyle = style ?? const TextStyle();
+    // Ensure text color is readable: prefer provided style color, otherwise use dark color
+    final Color textColor = style?.color ?? Colors.black87;
+    final defaultStyle = (style ?? const TextStyle()).copyWith(color: textColor);
 
     return RichText(
       text: TextSpan(
@@ -161,6 +175,7 @@ class SearchResultCardWidget extends StatelessWidget {
             style: defaultStyle.copyWith(
               backgroundColor: Colors.yellow[200],
               fontWeight: FontWeight.bold,
+              color: defaultStyle.color,
             ),
           ),
           TextSpan(text: text.substring(index + query.length)),
