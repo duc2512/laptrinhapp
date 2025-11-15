@@ -47,15 +47,12 @@ class _SearchScreenState extends State<SearchScreen>
       _currentUser = authState.user;
     }
     
-    // User only has 1 tab (Books), Admin/Librarian has 2 tabs
-    final tabCount = PermissionHelper.isRegularUser(_currentUser) ? 1 : 2;
-    _tabController = TabController(length: tabCount, vsync: this);
+    // Everyone has 2 tabs now
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     
-    // Load search history
-    if (!PermissionHelper.isRegularUser(_currentUser)) {
-      context.read<SearchBloc>().add(const LoadSearchHistoryEvent());
-    }
+    // Load search history for all users
+    context.read<SearchBloc>().add(const LoadSearchHistoryEvent());
   }
 
   @override
@@ -74,58 +71,75 @@ class _SearchScreenState extends State<SearchScreen>
         _searchController.clear();
       });
 
-      context.read<SearchBloc>().add(const ClearSearchEvent());
+      if (PermissionHelper.isRegularUser(_currentUser)) {
+        // For user, load history when switching to history tab
+        if (_tabController.index == 1) {
+          context.read<SearchBloc>().add(const LoadSearchHistoryEvent());
+        }
+      } else {
+        // For admin/librarian, clear search
+        context.read<SearchBloc>().add(const ClearSearchEvent());
+      }
     }
   }
 
   void _onSearchChanged(String query) {
-    // User always searches books from database
+    // User searches books; Admin/Librarian search borrowers/books via BLoC
     if (PermissionHelper.isRegularUser(_currentUser)) {
-      // Cancel previous timer
-      _debounceTimer?.cancel();
-      
-      if (query.trim().isEmpty) {
-        setState(() {
-          _bookResults = [];
-          _bookSearchQuery = '';
-          _isLoadingBooks = false;
-        });
-        return;
-      }
-      
-      // Show loading immediately
-      setState(() {
-        _isLoadingBooks = true;
-        _bookSearchQuery = query;
-      });
-      
-      // Debounce search - wait 500ms after user stops typing
-      _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-        // Search books from database
-        final bookSearchService = getIt<BookSearchService>();
-        final result = await bookSearchService.searchBooks(query);
+      if (_tabController.index == 0) {
+        // Tab 0: Book search
+        // Cancel previous timer
+        _debounceTimer?.cancel();
         
-        result.fold(
-          (failure) {
-            if (mounted) {
-              setState(() {
-                _isLoadingBooks = false;
-                _bookResults = [];
-              });
-            }
-          },
-          (books) {
-            if (mounted) {
-              setState(() {
-                _isLoadingBooks = false;
-                _bookResults = books;
-              });
-            }
-          },
-        );
-      });
+        if (query.trim().isEmpty) {
+          setState(() {
+            _bookResults = [];
+            _bookSearchQuery = '';
+            _isLoadingBooks = false;
+          });
+          return;
+        }
+        
+        // Show loading immediately
+        setState(() {
+          _isLoadingBooks = true;
+          _bookSearchQuery = query;
+        });
+        
+        // Debounce search - wait 500ms after user stops typing
+        _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+          // Search books from database
+          final bookSearchService = getIt<BookSearchService>();
+          final result = await bookSearchService.searchBooks(query);
+          
+          result.fold(
+            (failure) {
+              if (mounted) {
+                setState(() {
+                  _isLoadingBooks = false;
+                  _bookResults = [];
+                });
+              }
+            },
+            (books) {
+              if (mounted) {
+                setState(() {
+                  _isLoadingBooks = false;
+                  _bookResults = books;
+                });
+                
+                // Save to search history if results found
+                if (books.isNotEmpty) {
+                  context.read<SearchBloc>().add(SaveSearchHistoryEvent(query));
+                }
+              }
+            },
+          );
+        });
+      }
+      // Tab 1: History - no search needed
     } else {
-      // Admin/Librarian can search by borrower or book
+      // Admin/Librarian
       if (_tabController.index == 0) {
         context.read<SearchBloc>().add(SearchByBorrowerNameEvent(query));
       } else {
@@ -137,11 +151,15 @@ class _SearchScreenState extends State<SearchScreen>
   void _onClearSearch() {
     _searchController.clear();
     if (PermissionHelper.isRegularUser(_currentUser)) {
-      setState(() {
-        _bookResults = [];
-        _bookSearchQuery = '';
-        _isLoadingBooks = false;
-      });
+      if (_tabController.index == 0) {
+        // Clear book results
+        setState(() {
+          _bookResults = [];
+          _bookSearchQuery = '';
+          _isLoadingBooks = false;
+        });
+      }
+      // Tab 1: History - no clear needed
     } else {
       context.read<SearchBloc>().add(const ClearSearchEvent());
     }
@@ -191,16 +209,19 @@ class _SearchScreenState extends State<SearchScreen>
               },
             ),
         ],
-        bottom: PermissionHelper.isRegularUser(_currentUser)
-            ? null // User: No tabs
-            : TabBar(
-                controller: _tabController,
-                indicatorColor: Colors.white,
-                tabs: const [
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          tabs: PermissionHelper.isRegularUser(_currentUser)
+              ? const [
+                  Tab(text: 'Sách'),
+                  Tab(text: 'Lịch sử'),
+                ]
+              : const [
                   Tab(text: 'Người mượn'),
                   Tab(text: 'Sách'),
                 ],
-              ),
+        ),
       ),
       body: Column(
         children: [
@@ -213,7 +234,9 @@ class _SearchScreenState extends State<SearchScreen>
               onChanged: _onSearchChanged,
               onClear: _onClearSearch,
               hintText: PermissionHelper.isRegularUser(_currentUser)
-                  ? 'Tìm theo tên sách...'
+                  ? (_tabController.index == 0
+                      ? 'Tìm theo tên sách...'
+                      : 'Tìm trong lịch sử...')
                   : (_tabController.index == 0
                       ? 'Tìm theo tên người mượn...'
                       : 'Tìm theo tên sách...'),
@@ -223,7 +246,7 @@ class _SearchScreenState extends State<SearchScreen>
           // Content
           Expanded(
             child: PermissionHelper.isRegularUser(_currentUser)
-                ? _buildBookSearchContent()
+                ? _buildUserContent()
                 : BlocConsumer<SearchBloc, SearchState>(
                     listener: (context, state) {
                       if (state is SearchHistoryLoaded) {
@@ -465,7 +488,63 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  // Build book search content for User
+  // Build user content with tabs
+  Widget _buildUserContent() {
+    if (_tabController.index == 0) {
+      // Tab 0: Book search
+      return _buildBookSearchContent();
+    } else {
+      // Tab 1: Search history
+      return _buildUserHistoryContent();
+    }
+  }
+
+  Widget _buildUserHistoryContent() {
+    return BlocConsumer<SearchBloc, SearchState>(
+      listener: (context, state) {
+        if (state is SearchHistoryLoaded) {
+          setState(() {
+            _searchHistory = state.history;
+          });
+        }
+      },
+      builder: (context, state) {
+        if (_searchHistory.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.history_rounded,
+                    size: 80,
+                    color: Colors.grey[300],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Chưa có lịch sử tìm kiếm',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SearchHistoryWidget(
+          history: _searchHistory,
+          onHistoryTap: _onHistoryTap,
+          onClearHistory: _onClearHistory,
+        );
+      },
+    );
+  }
+
+  // Build book search content for User Tab 0
   Widget _buildBookSearchContent() {
     if (_isLoadingBooks) {
       return const Center(
