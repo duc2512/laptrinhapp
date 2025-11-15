@@ -4,7 +4,7 @@ class DatabaseConfig {
   // 10.0.2.2 - Android emulator standard
   // 192.168.x.x - IP máy bạn trong mạng local
   // localhost - Chỉ work trên Windows desktop
-  static const String postgresHost = 'app.ptitavitech.online'; // IP đặc biệt cho Android emulator
+  static const String postgresHost = '192.168.99.101'; // IP đặc biệt cho Android emulator
   static const int postgresPort = 5432;
   static const String postgresDatabase = 'quan_ly_thu_vien_dev';
   static const String postgresUsername = 'postgres'; // Thay đổi theo username của bạn
